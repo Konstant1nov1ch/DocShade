@@ -1,0 +1,82 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/v1/health": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Проверить жизнеспособность сервиса",
+                "parameters": [
+                    {
+                        "description": "Тело запроса",
+                        "name": "requestBody",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/health.DtoIn"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/v1/upload": {
+            "post": {
+                "description": "Uploads a PDF document and processes it",
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Upload a PDF document",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "PDF file to upload",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/upload.DtoOut"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "health.DtoIn": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "upload.DtoOut": {
+            "type": "object",
+            "properties": {
+                "document_id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

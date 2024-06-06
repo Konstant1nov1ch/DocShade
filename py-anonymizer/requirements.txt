@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+spacy==3.7.4
+presidio-analyzer
+presidio-anonymizer
+PyMuPDF
+reportlab
+python-dotenv
+fpdf2
+PyPDF2
+natasha

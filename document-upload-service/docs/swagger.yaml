@@ -1,0 +1,51 @@
+definitions:
+  health.DtoIn:
+    properties:
+      message:
+        type: string
+    type: object
+  upload.DtoOut:
+    properties:
+      document_id:
+        type: string
+      message:
+        type: string
+      session_id:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /v1/health:
+    get:
+      parameters:
+      - description: Тело запроса
+        in: body
+        name: requestBody
+        required: true
+        schema:
+          $ref: '#/definitions/health.DtoIn'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      summary: Проверить жизнеспособность сервиса
+  /v1/upload:
+    post:
+      description: Uploads a PDF document and processes it
+      parameters:
+      - description: PDF file to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/upload.DtoOut'
+      summary: Upload a PDF document
+swagger: "2.0"

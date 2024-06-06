@@ -1,0 +1,79 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  PLATFORM: linux/amd64
+  SERVICE_NAME: queue-service
+  CONFIG_FILE: config.yaml
+  GOPRIVATE: gitlab.com/docshade/*
+
+before_script:
+  - if [ "$CI_JOB_STAGE" != "test" ]; then docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"; fi
+
+build:
+  stage: build
+  image: docker:stable
+  services:
+    - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - export DOCKER_BUILDKIT=1
+    - apk add --no-cache docker-compose
+    - mkdir -p build/prod/src/config
+    - TRIMMED_CONFIG=$(echo "$FULL_DEV_CONFIG" | tr -d '[:space:]')
+    - echo $TRIMMED_CONFIG
+    - echo "$TRIMMED_CONFIG" | base64 -d > build/prod/src/config/${CONFIG_FILE} || (echo "Failed to decode FULL_DEV_CONFIG"; exit 1)
+    - echo "Building Docker image with dev config"
+    - docker build --platform $PLATFORM --build-arg GITLAB_USER=$GITLAB_USER --build-arg GITLAB_TOKEN=$GITLAB_TOKEN --build-arg CONFIG_FILE=src/config/${CONFIG_FILE} -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG -f build/prod/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  only:
+    - main
+
+test:
+  stage: test
+  image: golang:1.22.1-bullseye
+  script:
+    - git config --global https.emptyAuth true
+    - git config --global url."https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/".insteadOf "https://gitlab.com/"
+    - mkdir -p build/prod/src/config
+    - TRIMMED_CONFIG=$(echo "$FULL_DEV_CONFIG" | tr -d '[:space:]')
+    - echo "$TRIMMED_CONFIG" | base64 -d > build/prod/src/config/${CONFIG_FILE} || (echo "Failed to decode FULL_DEV_CONFIG"; exit 1)
+    - go mod tidy
+    - go test ./...
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  only:
+    - main
+  when: manual
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - git config --global https.emptyAuth true
+    - git config --global url."https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.com/".insteadOf "https://gitlab.com/"
+    - apk add --no-cache curl
+    - curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl"
+    - chmod +x ./kubectl
+    - mv ./kubectl /usr/local/bin/kubectl
+  script:
+    - mkdir -p build/prod/src/config
+    - TRIMMED_CONFIG=$(echo "$FULL_PROD_CONFIG" | tr -d '[:space:]')
+    - echo "$TRIMMED_CONFIG" | base64 -d > build/prod/src/config/${CONFIG_FILE} || (echo "Failed to decode FULL_PROD_CONFIG"; exit 1)
+    - echo "Rebuilding Docker image with prod config"
+    - docker build --platform $PLATFORM --build-arg GITLAB_USER=$GITLAB_USER --build-arg GITLAB_TOKEN=$GITLAB_TOKEN  --build-arg CONFIG_FILE=src/config/${CONFIG_FILE} -t $CI_REGISTRY_IMAGE:latest -f build/prod/Dockerfile .
+    - docker push $CI_REGISTRY_IMAGE:latest
+    - kubectl config set-cluster kubernetes --server=https://$KUBERNETES_SERVER --insecure-skip-tls-verify=true
+    - kubectl config set-credentials admin --token=$KUBERNETES_TOKEN
+    - kubectl config set-context default --cluster=kubernetes --user=admin
+    - kubectl config use-context default
+    - kubectl set image deployment/$SERVICE_NAME $SERVICE_NAME=$CI_REGISTRY_IMAGE:latest
+    - kubectl rollout status deployment/$SERVICE_NAME
+    - echo "Deleting old pods to force restart with new image"
+    - kubectl delete pod -l io.kompose.service=$SERVICE_NAME -n default
