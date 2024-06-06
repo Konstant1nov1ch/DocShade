@@ -4,10 +4,9 @@
 REGISTRY=registry.gitlab.com/docshade
 IMAGES=frontend py-anonymizer notification-service queue-service document-upload-service
 
-# Default rule
+
 all: push_images_into_gitlab
 
-# Rule for tagging and pushing images into GitLab
 push_images_into_gitlab: tag_images push_images
 
 tag_images:
